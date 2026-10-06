@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * 4K wall panels.
+   *
+   * The layout already adapts — tiles get bigger — but type sized for a 1080p
+   * screen is half the physical height on a 4K one at the same viewing
+   * distance, which defeats the point of the wall. Zooming the root scales
+   * text, spacing and borders together, and the grid measures itself after the
+   * zoom, so nothing has to be re-tuned per resolution.
+   */
+  @media (min-width: 2560px) {
+    :root {
+      zoom: 1.5;
+    }
+  }
+
+  /*
+   * Full height comes from percentages, not 100vh.
+   *
+   * Viewport units ignore the root zoom above, so on a 4K panel 100vh resolves
+   * to 2160 zoomed pixels and the "one screen, no scrolling" layout overflows
+   * by exactly a third. Percentages resolve against the zoom-adjusted
+   * containing block and stay correct at every scale.
+   */
+  html,
+  body,
+  #app {
+    min-height: 100%;
+  }
+
+  @media (min-width: 1024px) {
+    html,
+    body,
+    #app {
+      height: 100%;
+    }
+  }
+
+  body {
+    @apply bg-wall-950 text-slate-200 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #05080f;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #243044;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+}
+
+@layer components {
+  /*
+   * The panel is the single surface every block on the wall is built from.
+   * A near-black fill plus one hairline border reads as depth on an OLED or
+   * LED panel without adding a colour that competes with the status signals.
+   */
+  .panel {
+    @apply relative rounded-lg border border-white/[0.07] bg-white/[0.025] backdrop-blur-sm overflow-hidden;
+  }
+
+  /*
+   * A one-pixel gradient along the top edge. It is the only decoration in the
+   * design: enough to make a flat dark rectangle look deliberate, faint enough
+   * that nobody notices it as an effect.
+   */
+  .panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.45), transparent);
+    pointer-events: none;
+  }
+
+  .panel-flat::before {
+    display: none;
+  }
+
+  .panel-title {
+    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500;
+  }
+
+  /* Status accent bar down the left edge of a tile. */
+  .accent-bar {
+    @apply absolute left-0 top-0 bottom-0 w-[3px];
+  }
+}
+
+@layer utilities {
+  /*
+   * Numbers are the content of this dashboard. Tabular figures stop digits
+   * from shifting sideways every time a latency updates, which on a wall
+   * display is the difference between calm and flickering.
+   */
+  .num {
+    @apply font-mono tabular-nums;
+  }
+
+  /* A barely-there engineering grid, for depth behind the panels. */
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  /* Pulls the eye to the centre of a large panel by darkening the corners. */
+  .vignette::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 0%, rgba(34, 211, 238, 0.06), transparent 60%);
+  }
+
+  .glow-up {
+    box-shadow: 0 0 24px -8px rgba(16, 185, 129, 0.45);
+  }
+  .glow-warn {
+    box-shadow: 0 0 24px -8px rgba(245, 158, 11, 0.5);
+  }
+  .glow-down {
+    box-shadow: 0 0 28px -6px rgba(244, 63, 94, 0.55);
+  }
+
+  /* Used by the ticker, which duplicates its content to loop seamlessly. */
+  .ticker-track {
+    display: inline-flex;
+    white-space: nowrap;
+    will-change: transform;
+  }
+}

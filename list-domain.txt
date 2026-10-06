@@ -1,0 +1,14 @@
+# One block per registered domain. Subdomains may be bare hosts or full URLs.
+# The agent re-reads this file within 30 seconds of a change.
+
+domain: example.com
+subdomain: www.example.com
+
+domain: wikipedia.org
+subdomain: https://en.wikipedia.org, https://id.wikipedia.org, https://www.wikipedia.org
+
+domain: github.com
+subdomain: https://api.github.com, https://docs.github.com, https://status.github.com
+
+domain: cloudflare.com
+subdomain: https://www.cloudflare.com, https://developers.cloudflare.com

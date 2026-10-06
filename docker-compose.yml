@@ -1,0 +1,131 @@
+# Domain monitoring: one agent, one dashboard.
+#
+# Both run on the central server. Unlike the server-monitor fleet there is
+# nothing to install on the machines being watched, because every check here is
+# made from the outside: an HTTP request, a TLS handshake, a DNS query and a
+# registry lookup.
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: domain-monitor-agent:1.0
+    container_name: domain-monitor-agent
+    restart: unless-stopped
+
+    # Internal hosts that public DNS cannot resolve can be pinned here:
+    # extra_hosts:
+    #   - "intranet.example.com:192.0.2.10"
+
+    environment:
+      HTTP_ADDR: ":9292"
+      TARGETS_FILE: "/config/list-domain.txt"
+      DB_PATH: "/data/domain-monitor.db"
+
+      # Probe cadence. Certificates and registrations move on the scale of
+      # months, so checking them often would only annoy the registries.
+      HTTP_INTERVAL: "${HTTP_INTERVAL:-60s}"
+      TLS_INTERVAL: "${TLS_INTERVAL:-6h}"
+      DNS_INTERVAL: "${DNS_INTERVAL:-15m}"
+      RDAP_INTERVAL: "${RDAP_INTERVAL:-12h}"
+      PROBE_CONCURRENCY: "${PROBE_CONCURRENCY:-8}"
+
+      # Per-probe timeouts. A server further from the monitored sites, or one
+      # behind a slower egress path, may legitimately need more headroom than
+      # a laptop on the office network did.
+      HTTP_TIMEOUT: "${HTTP_TIMEOUT:-10s}"
+      TLS_TIMEOUT: "${TLS_TIMEOUT:-8s}"
+      DNS_TIMEOUT: "${DNS_TIMEOUT:-5s}"
+      RDAP_TIMEOUT: "${RDAP_TIMEOUT:-15s}"
+
+      # Thresholds. The agent classifies status, so these are the single
+      # definition of "degraded" for every view of the dashboard.
+      LATENCY_WARN_MS: "${LATENCY_WARN_MS:-800}"
+      LATENCY_CRIT_MS: "${LATENCY_CRIT_MS:-2000}"
+      CERT_WARN_DAYS: "${CERT_WARN_DAYS:-30}"
+      CERT_CRIT_DAYS: "${CERT_CRIT_DAYS:-14}"
+      DOMAIN_WARN_DAYS: "${DOMAIN_WARN_DAYS:-60}"
+      DOMAIN_CRIT_DAYS: "${DOMAIN_CRIT_DAYS:-30}"
+
+      # Status codes that count as healthy even though they are not 2xx. An
+      # API or CDN root that answers 401 or 403 is working as designed; add
+      # 404 here for hosts that legitimately have no page at /.
+      ACCEPT_STATUS: "${ACCEPT_STATUS:-401,403}"
+
+      RETENTION_DAYS: "${RETENTION_DAYS:-7}"
+      API_TOKEN: "${API_TOKEN:-}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      TZ: "${TZ:-Asia/Jakarta}"
+
+      # Webhook Alerting
+      WEBHOOK_ENABLED: "${WEBHOOK_ENABLED:-false}"
+      WEBHOOK_URL: "${WEBHOOK_URL:-}"
+      WEBHOOK_CHANNEL: "${WEBHOOK_CHANNEL:-both}"
+      WEBHOOK_CHAT_ID: "${WEBHOOK_CHAT_ID:-}"
+      WEBHOOK_WA_RECIPIENT: "${WEBHOOK_WA_RECIPIENT:-}"
+      CAPTURE_URL: "${CAPTURE_URL:-http://localhost:8082/}"
+
+    volumes:
+      # The target list is read straight off the host and re-read within 30
+      # seconds of changing, so adding a subdomain needs no restart at all.
+      - ./list-domain.txt:/config/list-domain.txt:ro
+
+      # History lives in a named volume: uptime percentages and incidents must
+      # survive `docker compose down`.
+      - domain-monitor-data:/data
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9292/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: domain-monitor-dashboard:1.0
+    container_name: domain-monitor-dashboard
+    restart: unless-stopped
+
+    depends_on:
+      - agent
+
+    ports:
+      # 8081 by default so it does not collide with the server dashboard.
+      - "${FRONTEND_PORT:-8082}:80"
+
+    environment:
+      # Substituted into the Nginx config at container start, so a change here
+      # needs a restart rather than an image rebuild.
+      AGENT_ADDR: "${AGENT_ADDR:-agent:9292}"
+      PROMETHEUS_ADDR: "${PROMETHEUS_ADDR:-prometheus:9090}"
+      TZ: "${TZ:-Asia/Jakarta}"
+
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./deploy/docker/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  domain-monitor-data:

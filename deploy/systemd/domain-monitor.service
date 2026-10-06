@@ -1,0 +1,64 @@
+[Unit]
+Description=Domain Monitor Agent - Uptime, SSL, DNS and Registration Expiry
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=domain-monitor
+Group=domain-monitor
+
+WorkingDirectory=/opt/domain-monitor
+ExecStart=/opt/domain-monitor/domain-monitor
+
+# Environment configuration.
+#
+# Order matters: systemd applies these directives top to bottom and a later
+# assignment wins, so EnvironmentFile MUST come after the defaults below.
+# With it above them, every value an operator put in the file would be silently
+# overwritten by the default it was meant to replace.
+Environment=HTTP_ADDR=:9292
+Environment=TARGETS_FILE=/etc/domain-monitor/list-domain.txt
+Environment=DB_PATH=/var/lib/domain-monitor/domain-monitor.db
+Environment=HTTP_INTERVAL=60s
+Environment=TLS_INTERVAL=6h
+Environment=DNS_INTERVAL=15m
+Environment=RDAP_INTERVAL=12h
+Environment=ACCEPT_STATUS=401,403
+Environment=LOG_LEVEL=info
+
+# Optional, and the place to put every local override.
+EnvironmentFile=-/etc/domain-monitor/domain-monitor.env
+
+Restart=always
+RestartSec=5s
+
+# Security hardening.
+#
+# This agent needs no privileges at all: it makes outbound connections and
+# writes one SQLite file. That is unusual for a monitoring agent and worth
+# taking advantage of, so the sandbox here is much tighter than the
+# server-monitor unit, which needs host access to read other processes.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+
+# ProtectSystem=strict makes everything read-only, so the history directory
+# has to be granted back explicitly.
+StateDirectory=domain-monitor
+ReadWritePaths=/var/lib/domain-monitor
+
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target
