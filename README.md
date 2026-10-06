@@ -155,3 +155,7 @@ cd frontend && npm run build    # vue-tsc type-check + production build
 ```
 
 The dashboard's interface text is in Indonesian.
+
+## License
+
+[MIT](LICENSE) © Radhian Sobarna
